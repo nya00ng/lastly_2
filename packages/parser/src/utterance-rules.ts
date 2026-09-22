@@ -10,6 +10,8 @@
  * 처음 보는 대상이어도 사전에 없을 이유가 없다.
  */
 
+import { readMorphologySignals, withoutIntentionAuxiliary } from './morphology-rules';
+
 export type Intent = 'record' | 'query';
 
 export type SaveKind =
@@ -30,6 +32,8 @@ export interface SaveDecision {
 export interface UtteranceFacts {
   intent: Intent;
   willSave: boolean;
+  /** 저장 차단 사유와 규칙 폴백(none)을 구분하기 위한 분류. */
+  saveKind: SaveKind;
   /** 기준일로부터 며칠 전인지. 시간 표현이 없으면 0. */
   daysAgo: number;
   /** 문장에서 직접 말한 주기(일). 말하지 않았으면 null. */
@@ -310,7 +314,11 @@ function anyMatch(text: string, patterns: RegExp[]): boolean {
 }
 
 function hasCompletedMarker(text: string): boolean {
-  return anyMatch(text, COMPLETED);
+  const morphology = readMorphologySignals(text);
+  return (
+    !morphology.nonActionPredicate &&
+    (anyMatch(withoutIntentionAuxiliary(text), COMPLETED) || morphology.completed)
+  );
 }
 
 /** "빨았어, 일주일마다 알려줘" 는 조회가 아니라 기록+알림이다. */
@@ -329,10 +337,14 @@ function readIntentFixed(text: string): Intent {
  */
 function classifyKind(text: string): Exclude<SaveKind, 'query'> {
   const t = text.replace(/\s+/g, ' ');
-  if (anyMatch(t, INCOMPLETE)) return 'incomplete';
-  if (anyMatch(t, UNCERTAIN)) return 'uncertain';
-  const completed = anyMatch(t, COMPLETED);
-  if (anyMatch(t, PLANNED) && !completed) return 'planned';
+  const morphology = readMorphologySignals(t);
+  const completed = hasCompletedMarker(t);
+  if (anyMatch(t, INCOMPLETE) || morphology.negative || morphology.nearMiss) return 'incomplete';
+  if (anyMatch(t, UNCERTAIN) || morphology.uncertain || morphology.thirdPerson || morphology.nonAssertion) {
+    return 'uncertain';
+  }
+  if (morphology.nonActionPredicate && !morphology.negative) return 'none';
+  if ((anyMatch(t, PLANNED) || morphology.intended) && !completed) return 'planned';
   if (completed) return 'completed';
   return 'none';
 }
@@ -347,8 +359,7 @@ export function classifySave(text: string, reference = new Date()): SaveDecision
   if (kind === 'completed' && hasFutureDate(text, reference)) {
     return { intent, willSave: false, kind: 'planned' };
   }
-  const blocked = kind === 'incomplete' || kind === 'planned' || kind === 'uncertain';
-  return { intent, willSave: !blocked, kind };
+  return { intent, willSave: kind === 'completed', kind };
 }
 
 /* ─────────────────────────── 이름 ─────────────────────────── */
@@ -535,6 +546,7 @@ export function readUtterance(text: string, reference: Date): UtteranceFacts {
   return {
     intent: save.intent,
     willSave: save.willSave,
+    saveKind: save.kind,
     daysAgo,
     statedCadenceDays: readCadenceDays(text),
     name,

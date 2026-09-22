@@ -237,6 +237,19 @@ describe('저장 여부', () => {
     expect(got.sawAction).toBe(false);
   });
 
+  it.each(['오늘 점심 맛있었다', '응 그거야'])('완료·행동 없는 말은 저장하지 않는다', (text) => {
+    expect(classifySave(text, SUN)).toEqual({
+      intent: 'record',
+      willSave: false,
+      kind: 'none',
+    });
+    expect(readUtterance(text, SUN)).toMatchObject({
+      willSave: false,
+      saveKind: 'none',
+      sawAction: false,
+    });
+  });
+
   it('미래 절대 날짜의 완료 표현은 저장하지 않는다', () => {
     const save = classifySave('2099년 8월 1일 방 청소했어', SUN);
     expect(save.kind).toBe('planned');
@@ -262,5 +275,42 @@ describe('저장 여부', () => {
     const save = classifySave('2026년 2월 30일 방 청소했어', SUN);
     expect(save.kind).toBe('uncertain');
     expect(save.willSave).toBe(false);
+  });
+});
+
+describe('형태소 기반 안전 규칙', () => {
+  it.each([
+    ['화분 물 안 줬어', 'incomplete'],
+    ['화분 물 못 줬어', 'incomplete'],
+    ['신발 빨려고 했어', 'planned'],
+    ['신발 빨아야 해', 'planned'],
+    ['신발 빨 생각이었어', 'planned'],
+    ['신발 빨까 했어', 'planned'],
+    ['화분 물 줄 생각이야', 'planned'],
+    ['신발 빨았을 수도 있어', 'uncertain'],
+    ['친구가 식탁 닦았어', 'uncertain'],
+    ['문 열었다고 들었어', 'uncertain'],
+    ['문안열었어', 'incomplete'],
+    ['신발 빨 뻔했어', 'incomplete'],
+  ] as const)('%s는 저장하지 않는다', (text, kind) => {
+    expect(classifySave(text, SUN)).toMatchObject({
+      willSave: false,
+      kind,
+    });
+  });
+
+  it.each(['화분 물 줬어', '아이 약 먹였어', '문 열었어'])('%s는 완료로 읽는다', (text) => {
+    expect(classifySave(text, SUN)).toMatchObject({
+      intent: 'record',
+      willSave: true,
+      kind: 'completed',
+    });
+  });
+
+  it('형용사 수식어가 있는 완료 행동은 막지 않는다', () => {
+    expect(classifySave('좋은 세제 넣었어', SUN)).toMatchObject({
+      willSave: true,
+      kind: 'completed',
+    });
   });
 });
