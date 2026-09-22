@@ -1,4 +1,12 @@
-import { classifySave, readCadenceDays, readDaysAgo, readIntent, readName, readNameWithAction } from '@lastly/parser';
+import {
+  classifySave,
+  readCadenceDays,
+  readDaysAgo,
+  readIntent,
+  readName,
+  readNameWithAction,
+  readUtterance,
+} from '@lastly/parser';
 
 /**
  * 규칙 파서는 LLM 을 부르지 않고 끝낼 수 있는 문장을 가려내는 자리다.
@@ -66,6 +74,35 @@ describe('날짜 읽기', () => {
     expect(readDaysAgo('이불 빨았어', SUN)).toEqual({ daysAgo: 0, saw: false });
     expect(readDaysAgo('오늘 이불 빨았어', SUN)).toEqual({ daysAgo: 0, saw: true });
   });
+
+  it('절대 날짜도 기준일보다 과거면 정확한 일수로 읽는다', () => {
+    expect(readDaysAgo('2026년 9월 10일 정수기 필터 갈았어', SUN)).toEqual({
+      daysAgo: 3,
+      saw: true,
+    });
+  });
+
+  it.each([
+    '2026-09-10 정수기 필터 갈았어',
+    '2026.09.10 정수기 필터 갈았어',
+    '9월 10일 정수기 필터 갈았어',
+  ])('%s도 과거 절대 날짜로 읽는다', (text) => {
+    expect(readDaysAgo(text, SUN)).toEqual({ daysAgo: 3, saw: true });
+  });
+
+  it('미래 절대 날짜는 수행일로 저장할 수 없도록 오늘로 고정한다', () => {
+    expect(readDaysAgo('2099년 8월 1일 방 청소했어', SUN)).toEqual({
+      daysAgo: 0,
+      saw: true,
+    });
+  });
+
+  it('유효하지 않은 절대 날짜는 오늘 날짜로 조용히 대체하지 않는다', () => {
+    expect(readDaysAgo('2026년 2월 30일 방 청소했어', SUN)).toEqual({
+      daysAgo: 0,
+      saw: true,
+    });
+  });
 });
 
 describe('의도 읽기', () => {
@@ -87,6 +124,8 @@ describe('이름 읽기', () => {
     ['그저께 칫솔 갈았어', '칫솔 교체'],
     ['이불 세탁했어', '이불 빨래'],
     ['3일 전에 정수기 필터 갈았어', '정수기 필터 교체'],
+    ['2026년 9월 10일 방 청소했어', '방 청소'],
+    ['2026-09-10 방 청소했어', '방 청소'],
     ['오늘 이불 빨았어 한달에 한번 빨거야', '이불 빨래'],
     ['세탁조 청소했어 세달에 한번 할래', '세탁조 청소'],
     ['마지막으로 이불 언제 빨았지?', '이불 빨래'],
@@ -196,5 +235,32 @@ describe('저장 여부', () => {
   it('완료 표지 없는 잔여는 이름으로 믿지 않는다', () => {
     const got = readNameWithAction('오늘 점심 맛있었다');
     expect(got.sawAction).toBe(false);
+  });
+
+  it('미래 절대 날짜의 완료 표현은 저장하지 않는다', () => {
+    const save = classifySave('2099년 8월 1일 방 청소했어', SUN);
+    expect(save.kind).toBe('planned');
+    expect(save.willSave).toBe(false);
+  });
+
+  it.each(['내일 방 청소했어', '다음 주 방 청소했어'])('%s도 저장하지 않는다', (text) => {
+    const save = classifySave(text, SUN);
+    expect(save.kind).toBe('planned');
+    expect(save.willSave).toBe(false);
+  });
+
+  it('통합 발화 결과도 미래 완료를 저장 대상으로 표시하지 않는다', () => {
+    expect(readUtterance('2099년 8월 1일 방 청소했어', SUN)).toMatchObject({
+      daysAgo: 0,
+      sawDate: true,
+      name: '방 청소',
+      willSave: false,
+    });
+  });
+
+  it('유효하지 않은 절대 날짜의 완료 표현은 저장하지 않는다', () => {
+    const save = classifySave('2026년 2월 30일 방 청소했어', SUN);
+    expect(save.kind).toBe('uncertain');
+    expect(save.willSave).toBe(false);
   });
 });
