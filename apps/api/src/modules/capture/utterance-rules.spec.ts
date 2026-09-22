@@ -138,6 +138,15 @@ describe('이름 읽기', () => {
     expect(readName('가습기 필터 갈았어')).toBe('가습기 필터 교체');
     expect(readName('블라인드 닦았어')).toBe('블라인드 청소');
   });
+
+  it.each([
+    ['나 오늘 책 읽었고 일주일에 한번씩 읽을거야', '책 읽기', 7],
+    ['주방후드 청소했고 다음주부터 일주일에 한번씩할거야', '주방후드 청소', 7],
+  ] as const)('%s에서 완료 행동과 주기를 항목명에서 분리한다', (text, name, cadenceDays) => {
+    const got = readNameWithAction(text);
+    expect(got).toEqual({ name, sawAction: true });
+    expect(readCadenceDays(text)).toBe(cadenceDays);
+  });
 });
 
 describe('그 자체가 행동인 말', () => {
@@ -182,6 +191,23 @@ describe('사전에 없던 동사', () => {
 });
 
 describe('저장 여부', () => {
+  it.each([
+    '나 오늘 책 읽었고 일주일에 한번씩 읽을거야',
+    '주방후드 청소했고 다음주부터 일주일에 한번씩할거야',
+  ])('%s는 완료 기록으로 저장할 수 있다', (text) => {
+    expect(classifySave(text, SUN)).toMatchObject({
+      intent: 'record',
+      willSave: true,
+      kind: 'completed',
+    });
+    expect(readUtterance(text, SUN)).toMatchObject({
+      name: expect.any(String),
+      statedCadenceDays: 7,
+      willSave: true,
+      saveKind: 'completed',
+    });
+  });
+
   it('완료 뒤에 할거야는 주기이지 예정이 아니다', () => {
     const save = classifySave('오늘 가습기 필터 설치했고 한달마다 할거야');
     expect(save.kind).toBe('completed');
@@ -260,6 +286,17 @@ describe('저장 여부', () => {
     const save = classifySave(text, SUN);
     expect(save.kind).toBe('planned');
     expect(save.willSave).toBe(false);
+  });
+
+  it('완료 뒤의 미래 일정 시작은 반복 주기로 읽되 미래 완료는 계속 차단한다', () => {
+    expect(classifySave('오늘 책 읽었어 내일부터 매일 할거야', SUN)).toMatchObject({
+      kind: 'completed',
+      willSave: true,
+    });
+    expect(classifySave('내일 책 읽었어 일주일마다 할거야', SUN)).toMatchObject({
+      kind: 'planned',
+      willSave: false,
+    });
   });
 
   it('통합 발화 결과도 미래 완료를 저장 대상으로 표시하지 않는다', () => {

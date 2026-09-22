@@ -62,6 +62,7 @@ const SINO_NATIVE: Record<string, number> = {
 const DAY_WORDS: Record<string, number> = {
   하루: 1, 이틀: 2, 사흘: 3, 나흘: 4, 닷새: 5,
   엿새: 6, 이레: 7, 여드레: 8, 아흐레: 9, 열흘: 10, 보름: 15,
+  일주일: 7,
 };
 
 const UNIT_DAYS: Record<string, number> = {
@@ -261,6 +262,14 @@ function hasFutureDate(text: string, reference: Date): boolean {
   return resolveDate(text, reference).future;
 }
 
+/** 완료 사실 뒤의 "내일부터/다음주부터 매주"는 수행일이 아니라 반복 일정의 시작점이다. */
+function hasFutureScheduleStart(text: string): boolean {
+  return (
+    readCadenceDays(text) !== null &&
+    /(?:내일|모레|다음\s*(?:주|달|개월|년|해))\s*부터/.test(text)
+  );
+}
+
 function hasInvalidDate(text: string, reference: Date): boolean {
   return resolveDate(text, reference).invalid === true;
 }
@@ -356,7 +365,7 @@ export function classifySave(text: string, reference = new Date()): SaveDecision
   if (kind === 'completed' && hasInvalidDate(text, reference)) {
     return { intent, willSave: false, kind: 'uncertain' };
   }
-  if (kind === 'completed' && hasFutureDate(text, reference)) {
+  if (kind === 'completed' && hasFutureDate(text, reference) && !hasFutureScheduleStart(text)) {
     return { intent, willSave: false, kind: 'planned' };
   }
   return { intent, willSave: kind === 'completed', kind };
@@ -394,6 +403,7 @@ const ACTION_NOUNS: Array<[RegExp, string]> = [
   // 좁은 것부터 본다. "빨래 널었어" 의 "빨래" 가 동사로 먹히면 안 된다.
   [/널(?:었|어|을|기)[가-힣]*/, '널기'],
   [/깎(?:았|아|을|기)[가-힣]*/, '깎기'],
+  [/읽(?:었|어|을|기)[가-힣]*/, '읽기'],
   // "이불 갰어" 는 개어 두는 일이므로 정리로 묶는다. 사전의 "이불 정리" 와 만난다.
   [/갰[가-힣]*|개(?:어|었)[가-힣]*/, '정리'],
   // "워셔액 넣었어", "세제 채웠어" — 다 떨어져 다시 채우는 일이다.
@@ -426,7 +436,7 @@ const DONE_MARKERS = /(?:끝냈|끝내|마쳤|마무리했|해치웠|완료했)[
 
 /** 이름에 들어가면 안 되는 시간 표현. */
 const TIME_EXPR =
-  /(\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일|\b\d{4}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{1,2}\b|\b\d{1,2}\s*월\s*\d{1,2}\s*일|아침|점심|저녁|밤|새벽|오전|오후|오늘|어제|어저께|그저께|그제|그끄저께|그그제|방금|아까|막|마지막으로|(?:지난|저번|작)\s*주\s*[월화수목금토일]\s*요일|(?:지난|저번|작)\s*주|(?:지난|저번)\s*달|작년|[월화수목금토일]\s*요일|\d+\s*(?:일|주일|주|개월|달|년)\s*전|하루\s*전|이틀\s*전|사흘\s*전|나흘\s*전|열흘\s*전)/g;
+  /(\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일|\b\d{4}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{1,2}\b|\b\d{1,2}\s*월\s*\d{1,2}\s*일|아침|점심|저녁|밤|새벽|오전|오후|오늘|어제|어저께|그저께|그제|그끄저께|그그제|방금|아까|막|마지막으로|(?:지난|저번|작)\s*주\s*[월화수목금토일]\s*요일|(?:지난|저번|작)\s*주|(?:다음|이번)\s*주(?:부터)?|(?:지난|저번)\s*달|작년|[월화수목금토일]\s*요일|\d+\s*(?:일|주일|주|개월|달|년)\s*전|하루\s*전|이틀\s*전|사흘\s*전|나흘\s*전|열흘\s*전)/g;
 
 /**
  * 말버릇으로 붙는 1인칭 주어. 항목 이름에 들어갈 자리가 아니다.
