@@ -147,9 +147,27 @@ export function readCadenceDays(text: string): number | null {
     if (re.test(text)) return clampCadence(days);
   }
 
+  // "주 1회", "일 2회"처럼 단위를 먼저 말하는 표기도 지원한다.
+  const unitFirstMatch = text.match(/(?:^|\s)(일|주일|주|개월|달|년|해)\s*(\d+|[가-힣])\s*회/);
+  if (unitFirstMatch) {
+    const unit = UNIT_DAYS[unitFirstMatch[1]!];
+    const n = toNumber(unitFirstMatch[2]!);
+    if (n && unit) return clampCadence(n * unit);
+  }
+
+  // "2주 1회", "한 달에 1회"처럼 회를 쓰는 표기도 번과 같은 뜻이다.
+  const countPerMatch = text.match(
+    /([\d]+|[가-힣])\s*(주일|개월|주|달|일|년|해)\s*(?:에\s*)?(?:한|1)\s*회/,
+  );
+  if (countPerMatch) {
+    const n = toNumber(countPerMatch[1]!);
+    const unit = UNIT_DAYS[countPerMatch[2]!];
+    if (n && unit) return clampCadence(n * unit);
+  }
+
   // "한달에 한번", "일주일에 한번", "3일에 한번씩"
   const perMatch = text.match(
-    /([\d]+|[가-힣])\s*(주일|개월|주|달|일|년|해)\s*에\s*(?:한|1)\s*번/,
+    /([\d]+|[가-힣])\s*(주일|개월|주|달|일|년|해)\s*에\s*(?:한|1)\s*(?:번|회)/,
   );
   if (perMatch) {
     const n = toNumber(perMatch[1]!);
@@ -414,8 +432,8 @@ const ACTION_NOUNS: Array<[RegExp, string]> = [
   [/돌(?:렸|리)[가-힣]*/, '돌리기'],
   [/세척\s*(?:했|해|할|하)[가-힣]*/, '세척'],
 
-  [/세탁\s*(?:했|해|할|하)[가-힣]*|빨래\s*(?:했|해|할|하)[가-힣]*|빨(?:았|아)[가-힣]*/, '빨래'],
-  [/교체\s*(?:했|해|할|하)[가-힣]*|갈(?:았|아|을|기)[가-힣]*|바꾸[가-힣]*|바꿨[가-힣]*/, '교체'],
+  [/세탁\s*(?:했|해|할|하)[가-힣]*|빨래\s*(?:했|해|할|하)[가-힣]*|빨\s*(?:거야|거예요|거에요|게|래)|빨(?:았|아)[가-힣]*/, '빨래'],
+  [/교체\s*(?:했|해|할|하)[가-힣]*|갈\s*(?:거야|거예요|거에요|게|래)|갈(?:았|아|을|기)[가-힣]*|바꾸[가-힣]*|바꿨[가-힣]*/, '교체'],
   [/청소\s*(?:했|해|할|하)[가-힣]*|닦(?:았|아|을|기)[가-힣]*|치웠[가-힣]*|치우[가-힣]*/, '청소'],
   [/물\s*(?:줬|주|줄|주기)[가-힣]*/, '물 주기'],
   [/정리\s*(?:했|해|할|하)[가-힣]*|정돈\s*(?:했|해|할|하)[가-힣]*/, '정리'],
@@ -436,7 +454,7 @@ const DONE_MARKERS = /(?:끝냈|끝내|마쳤|마무리했|해치웠|완료했)[
 
 /** 이름에 들어가면 안 되는 시간 표현. */
 const TIME_EXPR =
-  /(\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일|\b\d{4}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{1,2}\b|\b\d{1,2}\s*월\s*\d{1,2}\s*일|아침|점심|저녁|밤|새벽|오전|오후|오늘|어제|어저께|그저께|그제|그끄저께|그그제|방금|아까|막|마지막으로|(?:지난|저번|작)\s*주\s*[월화수목금토일]\s*요일|(?:지난|저번|작)\s*주|(?:다음|이번)\s*주(?:부터)?|(?:지난|저번)\s*달|작년|[월화수목금토일]\s*요일|\d+\s*(?:일|주일|주|개월|달|년)\s*전|하루\s*전|이틀\s*전|사흘\s*전|나흘\s*전|열흘\s*전)/g;
+  /(\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일|\b\d{4}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{1,2}\b|\b\d{1,2}\s*월\s*\d{1,2}\s*일|아침|점심|저녁|밤|새벽|오전|오후|오늘|내일|모레|주말(?:에)?|어제|어저께|그저께|그제|그끄저께|그그제|방금|아까|막|마지막으로|(?:지난|저번|작)\s*주\s*[월화수목금토일]\s*요일|(?:지난|저번|작)\s*주|(?:다음|이번)\s*주(?:부터)?|(?:지난|저번)\s*달|작년|[월화수목금토일]\s*요일|\d+\s*(?:일|주일|주|개월|달|년)\s*전|하루\s*전|이틀\s*전|사흘\s*전|나흘\s*전|열흘\s*전)/g;
 
 /**
  * 말버릇으로 붙는 1인칭 주어. 항목 이름에 들어갈 자리가 아니다.
@@ -450,13 +468,19 @@ const QUERY_EXPR = /(언제|얼마나|며칠|얼마만|몇\s*일|알려\s*줘|�
 function stripCadence(text: string): string {
   let s = text;
   for (const word of Object.keys(DAY_WORDS)) {
-    s = s.replace(new RegExp(`${word}\\s*(?:에\\s*(?:한|1)\\s*번(?:씩)?|마다)`, 'g'), ' ');
+    s = s.replace(new RegExp(`${word}\\s*(?:에\\s*(?:한|1)\\s*(?:번|회)(?:씩)?|마다)`, 'g'), ' ');
   }
   s = s.replace(
-    /([\d]+|[가-힣])\s*(?:주일|개월|주|달|일|년|해)\s*에\s*(?:한|1)\s*번(?:씩)?/g,
+    /([\d]+|[가-힣])\s*(?:주일|개월|주|달|일|년|해)\s*에\s*(?:한|1)\s*(?:번|회)(?:씩)?/g,
+    ' ',
+  );
+  // "2주 1회"처럼 "에"를 생략한 주기도 이름에서 제거한다.
+  s = s.replace(
+    /([\d]+|[가-힣])\s*(?:주일|개월|주|달|일|년|해)\s*(?:에\s*)?(?:한|1)\s*(?:번|회)(?:씩)?/g,
     ' ',
   );
   s = s.replace(/([\d]+|[가-힣])\s*(?:주일|개월|주|달|일|년|해)\s*마다/g, ' ');
+  s = s.replace(/(?:^|\s)(?:일|주일|주|개월|달|년|해)\s*(?:\d+|[가-힣])\s*회/g, ' ');
   s = s.replace(/(매일|날마다|매주|격주|매달|매월|매년|해마다)/g, ' ');
   return s;
 }
@@ -488,6 +512,24 @@ export function readName(text: string): string | null {
 export function readNameWithAction(text: string): { name: string | null; sawAction: boolean } {
   let s = stripCadence(text);
 
+  // 미래형·연결형을 지우기 전에 행동을 먼저 잡아야 "빨 거야"처럼
+  // 어미가 떨어진 동사도 항목명에 남길 수 있다.
+  let action: string | null = null;
+  for (const [pattern, noun] of ACTION_NOUNS) {
+    const m = s.match(pattern);
+    if (m) {
+      const actionStart = m.index ?? 0;
+      const beforeAction = s
+        .slice(0, actionStart)
+        // 행동 앞 목적어의 붙임표기만 제거한다. "곰팡이"의 마지막 "이"처럼
+        // 단어 자체의 일부인 글자까지 조사로 오인하지 않도록 을/를만 다룬다.
+        .replace(/([가-힣]+)(?:을|를)(?=\s*$)/, '$1');
+      action = noun;
+      s = `${beforeAction} ${s.slice(actionStart + m[0].length)}`;
+      break;
+    }
+  }
+
   /**
    * 앞으로의 다짐 — "빨거야", "할 거야", "하려고". 이름이 아니다.
    *
@@ -500,6 +542,7 @@ export function readNameWithAction(text: string): { name: string | null; sawActi
   s = s.replace(/([가-힣]+)?\s*(?:거|게)\s*야/g, (_m, word?: string) =>
     word && endsWithFutureEnding(word) ? ' ' : word ? ` ${word} ` : ' ',
   );
+  s = s.replace(/(?:싶(?:었어|었어요|었|어|어요|다|음)|(?:예정|계획|생각)이었(?:어|어요|다|음)?)/g, ' ');
 
   s = s.replace(DONE_MARKERS, ' ');
   s = s.replace(FIRST_PERSON, ' ');
@@ -511,17 +554,6 @@ export function readNameWithAction(text: string): { name: string | null; sawActi
    */
   s = s.replace(/(?:^|\s)[a-z]{2,}(?=\s|$)/g, ' ');
   s = s.replace(/[?？!！.,·]/g, ' ');
-
-  // 행동을 명사로 바꾼다. 문장에서는 지우고 끝에 붙인다.
-  let action: string | null = null;
-  for (const [pattern, noun] of ACTION_NOUNS) {
-    const m = s.match(pattern);
-    if (m) {
-      action = noun;
-      s = s.replace(pattern, ' ');
-      break;
-    }
-  }
 
   // 남은 조사와 서술어를 턴다.
   s = s.replace(/\s+/g, ' ').trim();

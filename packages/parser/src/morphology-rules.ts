@@ -32,10 +32,15 @@ const THIRD_PERSON_SUBJECT =
 
 const PAST_ENDING = /(?:(?:[가-힣]+)?(?:았|었|였|했|됐|줬|갔|왔|봤|났|졌|렸|쳤|썼|웠)(?:어|어요|다|음|지))(?=\s|[.!?~…]|$)/;
 const CONNECTED_PAST_ENDING = /(?:[가-힣]+)?(?:았|었|였|했|됐|줬|갔|왔|봤|났|졌|렸|쳤|켰|썼|웠)고(?=\s|[.!?~…]|$)/;
+const REPORTED_SPEECH = /(?:대|다며|라며|던데)(?=\s|[.!?~…]|$)/;
 
 /** "빨려고 했어"의 했어는 수행 완료가 아니라 시도/의도 보조 용언이다. */
 export function withoutIntentionAuxiliary(text: string): string {
   return text
+    // "읽어야 했어", "청소해야 했어"의 과거형은 수행 완료가 아니라 의무다.
+    .replace(/[가-힣]+(?:어야|아야|여야|해야)\s*했(?:어|어요|다|음)?/g, ' ')
+    // "청소하고 싶었어"의 과거형은 희망이지 수행 사실이 아니다.
+    .replace(/[가-힣]+고\s*싶(?:었어|었어요|었|어|어요|다|음)?/g, ' ')
     .replace(/[가-힣]+(?:으려고|려고|려다|려다가)\s*했(?:어|어요|다|음)?/g, ' ')
     .replace(/[가-힣]+\s*(?:생각|예정|계획|참)이었(?:어|어요|다|음)?/g, ' ')
     .replace(/[가-힣]+(?:을까|ㄹ까|까)\s*했(?:어|어요|다|음)?/g, ' ')
@@ -75,6 +80,7 @@ export function readMorphologySignals(text: string): MorphologySignals {
     /듯(?:해|하|했|싶)/.test(normalized) ||
     /(?:는지|은지|ㄴ지)\s*(?:모르|기억)/.test(normalized) ||
     /(?:았|었|였|했)(?:나|던가)(?=\s|[.!?~…]|$)/.test(normalized) ||
+    REPORTED_SPEECH.test(normalized) ||
     /기억|모르/.test(normalized) ||
     /(?:다고|라고)\s*(?:들|했|하)/.test(normalized) ||
     /줄\s*알/.test(normalized) ||
@@ -83,6 +89,7 @@ export function readMorphologySignals(text: string): MorphologySignals {
   const thirdPerson = PERSONAL_TOPIC.test(selfRemoved) || THIRD_PERSON_SUBJECT.test(selfRemoved);
   const nonAssertion =
     /(?:다고|라고)\s*(?:들|했|하)/.test(normalized) ||
+    REPORTED_SPEECH.test(normalized) ||
     /(?:는데|지만)(?=\s|[,.!?~…]|$)/.test(normalized) ||
     /(?:으면|면)(?=\s|[,.!?~…]|$)/.test(normalized);
 

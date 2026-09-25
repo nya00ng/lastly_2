@@ -27,6 +27,8 @@ describe('주기 읽기', () => {
     ['열흘마다 갈아', 10],
     ['매일 하는 거야', 1],
     ['격주로 할래', 14],
+    ['주 1회 필터 갈았어', 7],
+    ['2주 1회 필터 갈았어', 14],
   ])('%s → %s일', (text, days) => {
     expect(readCadenceDays(text)).toBe(days);
   });
@@ -142,10 +144,14 @@ describe('이름 읽기', () => {
   it.each([
     ['나 오늘 책 읽었고 일주일에 한번씩 읽을거야', '책 읽기', 7],
     ['주방후드 청소했고 다음주부터 일주일에 한번씩할거야', '주방후드 청소', 7],
+    ['내일 방 청소할 거야', '방 청소', null],
+    ['모레 이불 빨 거야', '이불 빨래', null],
+    ['주 1회 필터 갈았어', '필터 교체', 7],
+    ['2주 1회 필터 갈았어', '필터 교체', 14],
   ] as const)('%s에서 완료 행동과 주기를 항목명에서 분리한다', (text, name, cadenceDays) => {
     const got = readNameWithAction(text);
     expect(got).toEqual({ name, sawAction: true });
-    expect(readCadenceDays(text)).toBe(cadenceDays);
+    if (cadenceDays !== null) expect(readCadenceDays(text)).toBe(cadenceDays);
   });
 });
 
@@ -327,8 +333,12 @@ describe('형태소 기반 안전 규칙', () => {
     ['신발 빨았을 수도 있어', 'uncertain'],
     ['친구가 식탁 닦았어', 'uncertain'],
     ['문 열었다고 들었어', 'uncertain'],
+    ['방 청소했다며', 'uncertain'],
+    ['방 청소했대', 'uncertain'],
     ['문안열었어', 'incomplete'],
     ['신발 빨 뻔했어', 'incomplete'],
+    ['책을 읽어야 했어', 'planned'],
+    ['방 청소하고 싶었어', 'planned'],
   ] as const)('%s는 저장하지 않는다', (text, kind) => {
     expect(classifySave(text, SUN)).toMatchObject({
       willSave: false,

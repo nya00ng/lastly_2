@@ -210,6 +210,18 @@ export const RULE_GOLDEN_CASES: readonly RuleGoldenCase[] = [
     expected: { intent: 'PLANNED', recordCandidate: false },
   },
   {
+    id: 'planned-past-obligation',
+    category: 'planned',
+    text: '책을 읽어야 했어',
+    expected: { intent: 'PLANNED', recordCandidate: false },
+  },
+  {
+    id: 'planned-past-desire',
+    category: 'planned',
+    text: '방 청소하고 싶었어',
+    expected: { intent: 'PLANNED', recordCandidate: false },
+  },
+  {
     id: 'planned-cycle-intention',
     category: 'planned',
     text: '화분 물 줄 생각이야',
@@ -287,6 +299,18 @@ export const RULE_GOLDEN_CASES: readonly RuleGoldenCase[] = [
     id: 'uncertain-reported-speech',
     category: 'uncertain',
     text: '문 열었다고 들었어',
+    expected: { intent: 'UNCERTAIN', recordCandidate: false },
+  },
+  {
+    id: 'uncertain-reported-ending',
+    category: 'uncertain',
+    text: '방 청소했다며',
+    expected: { intent: 'UNCERTAIN', recordCandidate: false },
+  },
+  {
+    id: 'uncertain-hearsay-short',
+    category: 'uncertain',
+    text: '방 청소했대',
     expected: { intent: 'UNCERTAIN', recordCandidate: false },
   },
   {
